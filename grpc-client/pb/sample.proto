@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+package pb;
+
+option go_package = "/pb";
+
+service MongoDBService {
+  rpc FetchDataFromMongoDB(FetchRequest) returns (FetchResponse);
+  rpc FetchDataBatchFromMongoDB(BatchFetchRequest) returns (BatchFetchResponse);
+}
+
+message FetchRequest {
+  string parameters = 1;
+}
+
+message FetchResponse {
+  string fetched_data = 1;
+}
+
+message BatchFetchRequest {
+  repeated string patient_ids = 1;
+}
+
+message BatchFetchResponse {
+  repeated Patient fetched_data = 1;
+}
+
+message Patient{
+    string ContactNumber=1;
+    string MedicalHistory=2;
+    string DateOfDischarge=3;
+    string PatientID =4;
+    string FirstName =5;
+    string LastName =6;
+    string DateofBirth=7;
+    string Gender=8;
+}
+
+
+
+
+

@@ -1,0 +1,13 @@
+version: "3.8"
+
+services:
+  grpc-client:
+    build: .
+    networks:
+      - mynetwork
+
+
+networks:
+  mynetwork:
+    driver: bridge
+  
