@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: http-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: client-http
+  template:
+    metadata:
+      labels:
+        app: client-http
+    spec:
+      containers:
+        - name: client-http
+          image: fkchandramukhii/http-client
+          env:
+            - name: SERVICE_URL
+              value: "patient-service:8002"
+          ports:
+            - containerPort: 8001

@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grpc-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: client-grpc
+  template:
+    metadata:
+      labels:
+        app: client-grpc
+    spec:
+      containers:
+        - name: client-grpc
+          image: fkchandramukhii/grpc-client
+          env:
+            - name: SERVICE_URL
+              value: "patient-service:5002"
+          ports:
+            - containerPort: 5000

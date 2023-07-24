@@ -1,0 +1,28 @@
+version: "3.8"
+
+services:
+  patient-service:
+    build: ./service
+    ports:
+      - 8002:8002
+      - 5002:5002
+    depends_on:
+      - my-mongodb
+    
+
+  my-mongodb:
+    image: mongo:latest
+    ports:
+      - 27017:27017
+
+
+
+  http-client:
+    build: ./http-client
+    depends_on:
+      - patient-service
+
+  grpc-client:
+    build: ./grpc-client
+    depends_on:
+      - patient-service

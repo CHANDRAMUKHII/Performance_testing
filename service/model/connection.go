@@ -6,47 +6,45 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net/http"
 	"time"
 
-	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-type Patientid struct {
-	ID string `json:"patientid" bson:"patientid"`
-}
-
-func PrintJson() {
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10000*time.Second)
+func PrintJson(rw http.ResponseWriter, r *http.Request) {
+	_, cancel := context.WithTimeout(context.Background(), 10000*time.Second)
 	defer cancel()
 	collection := Client.Database("crud").Collection("patients")
-	cursor, _ := collection.Find(ctx, bson.M{})
-	var patients []Patientid
-	fmt.Print("Fetched data")
-	i := 0
-	for cursor.Next(ctx) {
-		var patient Patientid
 
-		if err := cursor.Decode(&patient); err != nil {
-			log.Fatal(err)
-		}
-
-		patients = append(patients, patient)
-		i++
-		if i == 100000 {
-			break
-		}
-	}
-	fmt.Print("Hii")
-
-	jsonData, err := json.Marshal(patients)
+	// Read JSON file
+	jsonData, err := ioutil.ReadFile("records.json")
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	err = ioutil.WriteFile("ids.json", jsonData, 0644)
+	var patients []Patient
+	err = json.Unmarshal(jsonData, &patients)
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	var insertModels []mongo.WriteModel
+
+	// Iterate through the patients and create an insertOne model for each patient
+	for _, patient := range patients {
+		insertModel := mongo.NewInsertOneModel().SetDocument(patient)
+		insertModels = append(insertModels, insertModel)
+	}
+
+	// Bulk insert the data into the collection
+	bulkOptions := options.BulkWrite().SetOrdered(false) // SetOrdered(false) allows unordered bulk insert
+	bulkResult, err := collection.BulkWrite(context.Background(), insertModels, bulkOptions)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Print("Inserted  documents into MongoDB!\n", bulkResult.InsertedCount)
 
 }

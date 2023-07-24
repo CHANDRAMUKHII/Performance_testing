@@ -10,4 +10,6 @@ COPY . .
 
 RUN go build -o main
 
+ENV SERVICE_URL=127.0.0.1:57050
+
 CMD ["./main"]

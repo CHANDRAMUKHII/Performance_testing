@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 )
@@ -14,24 +15,52 @@ type Patient struct {
 	ID string `json:"patientid"`
 }
 
-func main() {
-	fmt.Print("Hiiii")
-	sendRequest()
+type ResponseData struct {
+	Data        string        `json:"data"`
+	AverageTime time.Duration `json:"average_time"`
 }
 
-func sendRequest() {
+func main() {
+	fmt.Println("Starting server at port 8001")
+	http.HandleFunc("/", sendRequest)
+	log.Fatal(http.ListenAndServe(":8001", nil))
+}
+
+var startTime time.Time
+
+func sendRequest(rw http.ResponseWriter, r *http.Request) {
+
 	var average time.Duration
 	for i := 0; i < 1; i++ {
-		startTime := time.Now()
-		sendBulkRequest()
-		elapsedTime := time.Since(startTime)
+		startTime = time.Now()
+		elapsedTime := sendBulkRequest(rw)
 		average += elapsedTime
 		fmt.Println("Total time taken:", elapsedTime)
 	}
 	average /= 1
 	fmt.Println("Average time taken : ", average)
+
+	responseData := ResponseData{
+		Data:        "",
+		AverageTime: average,
+	}
+
+	responsePayload, err := json.Marshal(responseData)
+	if err != nil {
+		http.Error(rw, "Failed to marshal response", http.StatusInternalServerError)
+		return
+	}
+
+	rw.Header().Set("Content-Type", "application/json")
+
+	_, err = rw.Write(responsePayload)
+	if err != nil {
+		http.Error(rw, "Failed to write response", http.StatusInternalServerError)
+		return
+	}
 }
-func sendBulkRequest() {
+
+func sendBulkRequest(rw http.ResponseWriter) time.Duration {
 
 	jsonData, err := ioutil.ReadFile("output.json")
 	if err != nil {
@@ -52,22 +81,31 @@ func sendBulkRequest() {
 		if end > totalPatients {
 			end = totalPatients
 		}
-		if i >= 30000 {
+		if i > 10000 {
 			break
 		}
 		batch := patients[i:end]
-		sendBatchRequest(batch)
+		sendBatchRequest(batch, rw)
 	}
+
+	return time.Since(startTime)
 }
 
-func sendBatchRequest(batch []Patient) {
+func sendBatchRequest(batch []Patient, rw http.ResponseWriter) {
+
 	var patientIDs []string
 	for _, patient := range batch {
 		patientIDs = append(patientIDs, patient.ID)
 	}
 
-	getURL := fmt.Sprintf("http://patient-service:8002/details?ids=%s", strings.Join(patientIDs, ","))
+	serviceURL := os.Getenv("SERVICE_URL")
 
+	if serviceURL == "" {
+		fmt.Println("SERVICE_URL environment variable is not set.")
+		return
+	}
+
+	getURL := fmt.Sprintf("http://%s/details?ids=%s", serviceURL, strings.Join(patientIDs, ","))
 	response, err := http.Get(getURL)
 	if err != nil {
 		log.Println("Error:", err)
@@ -75,11 +113,11 @@ func sendBatchRequest(batch []Patient) {
 	}
 	defer response.Body.Close()
 
-	_, err = ioutil.ReadAll(response.Body)
+	responseData, err := ioutil.ReadAll(response.Body)
 	if err != nil {
 		log.Println("Error:", err)
 		return
 	}
 
-	// fmt.Println(string(responseData))
+	rw.Write(responseData)
 }

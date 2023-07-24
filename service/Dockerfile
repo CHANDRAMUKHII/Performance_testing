@@ -12,4 +12,6 @@ RUN go build -o main
 
 EXPOSE 8002 5002
 
+
+
 CMD ["./main"]

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net/http"
+	"os"
 	"time"
 
 	"google.golang.org/grpc"
@@ -17,10 +19,31 @@ type PatientID struct {
 	ID string `json:"patientid"`
 }
 
+type ResponseData struct {
+	Data        []*pb.Patient `json:"data"`
+	AverageTime time.Duration `json:"average_time"`
+}
+
+var startTime time.Time
+var average time.Duration
+
 func main() {
-	conn, err := grpc.Dial("patient-service:5002", grpc.WithInsecure())
+	http.HandleFunc("/", sendRequest)
+	log.Print("Listening in port 5000")
+	log.Fatal(http.ListenAndServe(":5000", nil))
+}
+
+func sendRequest(rw http.ResponseWriter, r *http.Request) {
+	serviceURL := os.Getenv("SERVICE_URL")
+
+	if serviceURL == "" {
+		fmt.Println("SERVICE_URL environment variable is not set.")
+		return
+	}
+	conn, err := grpc.Dial(serviceURL, grpc.WithInsecure())
 	if err != nil {
-		log.Fatalf("did not connect: %v", err)
+		http.Error(rw, "Failed to connect to gRPC server", http.StatusInternalServerError)
+		return
 	}
 	defer conn.Close()
 
@@ -28,62 +51,61 @@ func main() {
 
 	jsonData, err := ioutil.ReadFile("output.json")
 	if err != nil {
-		log.Fatalf("failed to read JSON file: %v", err)
+		http.Error(rw, "Failed to read JSON file", http.StatusInternalServerError)
+		return
 	}
 
 	var patientIDs []PatientID
 	err = json.Unmarshal(jsonData, &patientIDs)
 	if err != nil {
-		log.Fatalf("failed to unmarshal JSON data: %v", err)
+		http.Error(rw, "Failed to unmarshal JSON data", http.StatusInternalServerError)
+		return
 	}
 
-	var average time.Duration
-	for i := 0; i < 1; i++ {
-		startTime := time.Now()
-
-		batchSize := 10
-		for i := 0; i < len(patientIDs); i += batchSize {
-			end := i + batchSize
-			if end > len(patientIDs) {
-				end = len(patientIDs)
-			}
-			if i == 10000 {
-				break
-			}
-			batchRequest := &pb.BatchFetchRequest{}
-			for _, patientID := range patientIDs[i:end] {
-				batchRequest.PatientIds = append(batchRequest.PatientIds, patientID.ID)
-			}
-
-			_, err = client.FetchDataBatchFromMongoDB(context.Background(), batchRequest)
-			if err != nil {
-				log.Fatalf("request failed: %v", err)
-			}
-
-			// for _, fetchedData := range resp.FetchedData {
-			// 	printPatientDetails(fetchedData)
-			// }
-
+	var fetchedPatients []*pb.Patient
+	batchsize := 100
+	for i := 0; i < len(patientIDs); i += batchsize {
+		end := i + batchsize
+		if end > len(patientIDs) {
+			end = len(patientIDs)
+		}
+		if i > 10000 {
+			break
+		}
+		batchRequest := &pb.BatchFetchRequest{}
+		for _, patientID := range patientIDs[i:end] {
+			batchRequest.PatientIds = append(batchRequest.PatientIds, patientID.ID)
 		}
 
+		startTime = time.Now()
+		resp, err := client.FetchDataBatchFromMongoDB(context.Background(), batchRequest)
+		if err != nil {
+			http.Error(rw, "Failed to fetch data from MongoDB", http.StatusInternalServerError)
+			return
+		}
 		elapsedTime := time.Since(startTime)
 		average += elapsedTime
+		fetchedPatients = append(fetchedPatients, resp.FetchedData...)
+	}
+	average /= time.Duration(len(fetchedPatients))
+	log.Println("Average time taken:", average)
 
-		fmt.Println("Total time taken:", elapsedTime)
+	responseData := ResponseData{
+		Data:        fetchedPatients,
+		AverageTime: average,
 	}
 
-	average /= 1
-	fmt.Print("Average time taken : ", average)
-}
+	responsePayload, err := json.Marshal(responseData)
+	if err != nil {
+		http.Error(rw, "Failed to marshal response", http.StatusInternalServerError)
+		return
+	}
 
-func printPatientDetails(patient *pb.Patient) {
-	fmt.Println("Patient ID:", patient.PatientID)
-	fmt.Println("First Name:", patient.FirstName)
-	fmt.Println("Last Name:", patient.LastName)
-	fmt.Println("Date of Birth:", patient.DateofBirth)
-	fmt.Println("Gender:", patient.Gender)
-	fmt.Println("Contact Number:", patient.ContactNumber)
-	fmt.Println("Medical History:", patient.MedicalHistory)
-	fmt.Println("Date of Discharge:", patient.DateOfDischarge)
-	fmt.Println("------------------------------------")
+	rw.Header().Set("Content-Type", "application/json")
+
+	_, err = rw.Write(responsePayload)
+	if err != nil {
+		http.Error(rw, "Failed to write response", http.StatusInternalServerError)
+		return
+	}
 }

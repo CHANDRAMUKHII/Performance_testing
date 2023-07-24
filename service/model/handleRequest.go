@@ -28,12 +28,13 @@ var Client *mongo.Client
 
 func Connection() (*mongo.Client, error) {
 	var err error
-	const uri = "mongodb://my-mongodb:27017"
+	const uri = "mongodb://localhost:27017"
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	Client, err = mongo.Connect(ctx, options.Client().ApplyURI(uri))
 	if err != nil {
+		fmt.Println("Error in connecting to mongodb", err)
 		return nil, err
 	}
 

@@ -13,10 +13,12 @@ import (
 )
 
 func main() {
+
 	// HTTP Server
 	go func() {
-		http.HandleFunc("/details", controller.HandleBulkRequest)
 		fmt.Print("Listening on port 8002")
+		http.HandleFunc("/details", controller.HandleBulkRequest)
+		http.HandleFunc("/upload", model.PrintJson)
 		log.Fatal(http.ListenAndServe(":8002", nil))
 	}()
 

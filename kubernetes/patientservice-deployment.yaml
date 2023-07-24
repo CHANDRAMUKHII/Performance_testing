@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: patient-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: patient-app
+  template:
+    metadata:
+      labels:
+        app: patient-app
+    spec:
+      containers:
+        - name: patient-app
+          image: fkchandramukhii/patientservice
+          ports:
+            - containerPort: 8002
+            - containerPort: 5002
+          
+        - name: mongo
+          image: mongo
+          ports:
+            - containerPort: 27017
+          volumeMounts:
+            - mountPath: /app/db
+              name: patient-volume
+      volumes:
+        - name: patient-volume
+          persistentVolumeClaim:
+            claimName: host-pvc
